@@ -1,6 +1,6 @@
-# SOC Shift Management – Weekly Scheduler
+# Shift Management – Weekly Scheduler
 
-A simple web app to generate weekly Morning, Day, and Night shift assignments for SOC teams. It uses a fairness-aware random algorithm, supports week-to-week rotation, CSV export, and Excel/CSV import with per-day availability.
+A simple web app to generate weekly Morning, Day, and Night shift assignments for teams. It uses a fairness-aware random algorithm, supports week-to-week rotation, CSV export, and Excel/CSV import with per-day availability.
 
 ## Features
 
@@ -26,3 +26,15 @@ A simple web app to generate weekly Morning, Day, and Night shift assignments fo
 ## Deployment
 
 Host as static files (e.g., GitHub Pages, S3, Netlify). No server is required.
+
+### GitHub Pages (recommended)
+
+- This repository includes a workflow at `.github/workflows/deploy.yml`.
+- On every push to `main`, it deploys the site to GitHub Pages.
+- After the first run completes, your site will be available at:
+  - `https://3tternp.github.io/Shift-management/`
+
+If you see 404 initially, wait 1–2 minutes and refresh.
+
+To run locally:
+- `python -m http.server 5500` and visit `http://localhost:5500/`
