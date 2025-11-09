@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SOC Shift Management – Weekly Scheduler</title>
+    <!-- SheetJS for Excel/CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>SOC Shift Management – Weekly Scheduler</h1>
+      <p>Generate weekly Morning, Day, and Night shift assignments using a fair random algorithm.</p>
+    </header>
+
+    <main>
+      <section class="config">
+        <div class="field">
+          <label for="fileInput">Import staff from Excel/CSV (optional)</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" />
+          <div id="importMeta" class="meta" hidden>
+            Imported: <span id="importCount">0</span> staff. Columns detected: <span id="importCols">–</span>.
+          </div>
+          <div class="meta">
+            Expected columns: <code>Name</code> (required), <code>UnavailableDays</code> (optional, e.g. Mon,Wed,Fri), <code>StaffPerShift</code> (optional).
+          </div>
+        </div>
+        <div class="field">
+          <label for="staffNames">Staff names (one per line)</label>
+          <textarea id="staffNames" rows="10" placeholder="Alice\nBob\nCharlie\nDavid\nEve\nFrank\nGrace\nHeidi\nIvan\nJudy"></textarea>
+        </div>
+
+        <div class="field inline">
+          <label for="staffPerShift">Staff per shift</label>
+          <input type="number" id="staffPerShift" min="1" value="2" />
+        </div>
+
+        <div class="actions">
+          <button id="generateBtn">Generate Schedule</button>
+          <button id="nextWeekBtn" title="Regenerate with rotation bias">Regenerate for Next Week</button>
+          <button id="clearBtn" class="secondary">Clear</button>
+        </div>
+
+        <div id="errorBox" class="error" hidden></div>
+      </section>
+
+      <section id="scheduleSection" class="schedule" hidden>
+        <div class="schedule-header">
+          <h2>Weekly Schedule</h2>
+          <a id="exportCsv" class="link" href="#" download="soc_weekly_schedule.csv">Export CSV</a>
+        </div>
+        <div id="scheduleContainer"></div>
+      </section>
+    </main>
+
+    <footer>
+      <small>
+        Built for SOC weekly planning. Random assignment with fairness constraints and rotation across weeks.
+      </small>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
