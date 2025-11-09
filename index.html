@@ -3,18 +3,47 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SOC Shift Management – Weekly Scheduler</title>
+    <title>Shift Management – Weekly Scheduler</title>
     <!-- SheetJS for Excel/CSV parsing -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header>
-      <h1>SOC Shift Management – Weekly Scheduler</h1>
+      <h1>Shift Management – Weekly Scheduler</h1>
       <p>Generate weekly Morning, Day, and Night shift assignments using a fair random algorithm.</p>
     </header>
 
     <main>
+      <section class="staff-manager">
+        <h2>Staff Manager</h2>
+        <div class="field inline">
+          <label for="newStaffName">Name</label>
+          <input id="newStaffName" type="text" placeholder="Enter staff name" />
+          <button id="addStaffBtn">Add Staff</button>
+        </div>
+        <div class="field">
+          <div class="days-grid">
+            <label>Mark Unavailable Days</label>
+            <div class="days">
+              <label><input type="checkbox" class="dayChk" value="Mon" /> Mon</label>
+              <label><input type="checkbox" class="dayChk" value="Tue" /> Tue</label>
+              <label><input type="checkbox" class="dayChk" value="Wed" /> Wed</label>
+              <label><input type="checkbox" class="dayChk" value="Thu" /> Thu</label>
+              <label><input type="checkbox" class="dayChk" value="Fri" /> Fri</label>
+              <label><input type="checkbox" class="dayChk" value="Sat" /> Sat</label>
+              <label><input type="checkbox" class="dayChk" value="Sun" /> Sun</label>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <div class="staff-list-header">
+            <span class="meta">Managed Staff</span>
+            <button id="clearStaffBtn" class="secondary">Clear All</button>
+          </div>
+          <div id="staffList" class="staff-list" aria-live="polite"></div>
+        </div>
+      </section>
       <section class="config">
         <div class="field">
           <label for="fileInput">Import staff from Excel/CSV (optional)</label>
@@ -48,7 +77,7 @@
       <section id="scheduleSection" class="schedule" hidden>
         <div class="schedule-header">
           <h2>Weekly Schedule</h2>
-          <a id="exportCsv" class="link" href="#" download="soc_weekly_schedule.csv">Export CSV</a>
+          <a id="exportCsv" class="link" href="#" download="shift_weekly_schedule.csv">Export CSV</a>
         </div>
         <div id="scheduleContainer"></div>
       </section>
@@ -56,7 +85,7 @@
 
     <footer>
       <small>
-        Built for SOC weekly planning. Random assignment with fairness constraints and rotation across weeks.
+        Built for weekly planning. Random assignment with fairness constraints and rotation across weeks.
       </small>
     </footer>
 

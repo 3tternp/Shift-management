@@ -1,4 +1,4 @@
-// SOC Shift Management – Weekly Scheduler
+// Shift Management – Weekly Scheduler
 // Random assignment with fairness constraints and week-to-week rotation.
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -18,6 +18,11 @@ const els = {
   importMeta: document.getElementById("importMeta"),
   importCount: document.getElementById("importCount"),
   importCols: document.getElementById("importCols"),
+  // Staff manager UI
+  newStaffName: document.getElementById("newStaffName"),
+  addStaffBtn: document.getElementById("addStaffBtn"),
+  clearStaffBtn: document.getElementById("clearStaffBtn"),
+  staffList: document.getElementById("staffList"),
 };
 
 // Utilities
@@ -76,6 +81,90 @@ function loadLastWeekStats() {
 
 // Build fairness-aware weekly schedule
 let unavailabilityByStaff = {}; // { name: Set(dayName) }
+
+// Staff Manager persistence
+const STAFF_STORAGE_KEY = "shift_staff_manager";
+
+let staffManagerState = []; // [{ name: string, unavailable: Set(DAY) }]
+
+function saveStaffManager() {
+  try {
+    const serializable = staffManagerState.map((s) => ({
+      name: s.name,
+      unavailable: Array.from(s.unavailable || []),
+    }));
+    localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(serializable));
+  } catch {}
+}
+
+function loadStaffManager() {
+  try {
+    const raw = localStorage.getItem(STAFF_STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr)
+      ? arr.map((s) => ({ name: s.name, unavailable: new Set(s.unavailable || []) }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getDayCheckboxes() {
+  return Array.from(document.querySelectorAll(".dayChk"));
+}
+
+function getCheckedDays() {
+  return new Set(
+    getDayCheckboxes()
+      .filter((chk) => chk.checked)
+      .map((chk) => chk.value)
+  );
+}
+
+function clearDayChecks() {
+  for (const chk of getDayCheckboxes()) chk.checked = false;
+}
+
+function renderStaffList() {
+  if (!els.staffList) return;
+  els.staffList.innerHTML = "";
+  for (const entry of staffManagerState) {
+    const card = document.createElement("div");
+    card.className = "staff-card";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "staff-name";
+    nameEl.textContent = entry.name;
+
+    const unavailEl = document.createElement("span");
+    unavailEl.className = "unavail";
+    const days = Array.from(entry.unavailable || []).join(", ");
+    unavailEl.textContent = days ? `(Unavailable: ${days})` : "(Available all days)";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "Remove";
+    removeBtn.dataset.name = entry.name;
+
+    card.appendChild(nameEl);
+    card.appendChild(unavailEl);
+    card.appendChild(removeBtn);
+    els.staffList.appendChild(card);
+  }
+}
+
+function updateTextAreaFromManager() {
+  if (staffManagerState.length) {
+    els.staffNames.value = staffManagerState.map((s) => s.name).join("\n");
+  }
+}
+
+function updateUnavailabilityMapFromManager() {
+  unavailabilityByStaff = Object.fromEntries(
+    staffManagerState.map((s) => [s.name, new Set(s.unavailable || [])])
+  );
+}
 
 function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailability) {
   // Validation: require enough staff to avoid double-shifts in a day
@@ -281,12 +370,16 @@ function getConfig() {
 function generateAndRender({ useRotationBias = false } = {}) {
   try {
     const { staff, staffPerShift } = getConfig();
+    // Prefer Staff Manager as source if it has entries
+    const managerHasEntries = staffManagerState.length > 0;
+    const sourceStaff = managerHasEntries ? staffManagerState.map((s) => s.name) : staff;
+    const unavailSource = managerHasEntries ? Object.fromEntries(staffManagerState.map((s) => [s.name, new Set(s.unavailable || [])])) : unavailabilityByStaff;
     const lastWeekStats = useRotationBias ? loadLastWeekStats() : null;
     const { schedule, stats } = generateWeeklySchedule(
-      staff,
+      sourceStaff,
       staffPerShift,
       lastWeekStats,
-      unavailabilityByStaff
+      unavailSource
     );
     renderSchedule(schedule);
     updateExportLink(schedule);
@@ -431,3 +524,65 @@ if (els.fileInput) {
     if (file) handleFile(file);
   });
 }
+
+// Staff Manager handlers
+function addStaff() {
+  clearError();
+  const name = (els.newStaffName?.value || "").trim();
+  if (!name) {
+    showError("Please enter a staff name.");
+    return;
+  }
+  // prevent duplicates (case-insensitive)
+  const exists = staffManagerState.some((s) => s.name.toLowerCase() === name.toLowerCase());
+  if (exists) {
+    showError("This staff name already exists in the manager.");
+    return;
+  }
+  const unavailable = getCheckedDays();
+  staffManagerState.push({ name, unavailable });
+  saveStaffManager();
+  renderStaffList();
+  updateTextAreaFromManager();
+  updateUnavailabilityMapFromManager();
+  if (els.newStaffName) els.newStaffName.value = "";
+  clearDayChecks();
+}
+
+function removeStaff(name) {
+  staffManagerState = staffManagerState.filter((s) => s.name !== name);
+  saveStaffManager();
+  renderStaffList();
+  updateTextAreaFromManager();
+  updateUnavailabilityMapFromManager();
+}
+
+function clearAllStaff() {
+  staffManagerState = [];
+  saveStaffManager();
+  renderStaffList();
+  updateTextAreaFromManager();
+  updateUnavailabilityMapFromManager();
+}
+
+if (els.addStaffBtn) {
+  els.addStaffBtn.addEventListener("click", addStaff);
+}
+if (els.clearStaffBtn) {
+  els.clearStaffBtn.addEventListener("click", clearAllStaff);
+}
+if (els.staffList) {
+  els.staffList.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target && target.matches(".remove-btn")) {
+      const name = target.dataset.name;
+      if (name) removeStaff(name);
+    }
+  });
+}
+
+// Initialize Staff Manager from storage
+staffManagerState = loadStaffManager();
+renderStaffList();
+updateTextAreaFromManager();
+updateUnavailabilityMapFromManager();
