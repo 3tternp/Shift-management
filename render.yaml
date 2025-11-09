@@ -1,0 +1,12 @@
+services:
+  - type: static_site
+    name: shift-management
+    env: static
+    branch: main
+    buildCommand: ""
+    publishPath: "."
+    # Optional: if using client-side routing, uncomment routes rewrite
+    # routes:
+    #   - type: rewrite
+    #     source: /*
+    #     destination: /index.html

@@ -34,6 +34,17 @@ Host as static files (e.g., GitHub Pages, S3, Netlify). No server is required.
 - After the first run completes, your site will be available at:
   - `https://3tternp.github.io/Shift-management/`
 
+### Render (Static Site)
+
+- Deploy on Render as a static site, no build step required.
+- Steps:
+  - Push your latest code to the `main` branch on GitHub.
+  - Visit `https://dashboard.render.com/new/static` and connect repository `3tternp/Shift-management`.
+  - Set `Publish Directory` to `.` and leave `Build Command` empty.
+  - Name the site (e.g., `shift-management`) and create the service.
+  - Render will auto-deploy on each push to `main`.
+- Optional: This repo includes `render.yaml` as a blueprint you can use.
+
 If you see 404 initially, wait 1–2 minutes and refresh.
 
 To run locally:
