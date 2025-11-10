@@ -93,6 +93,12 @@
         </div>
 
         <div class="field inline">
+          <label for="weekStartDate">Week Start Date (for history)</label>
+          <input id="weekStartDate" type="date" />
+          <div class="meta">Optional: records generated schedules in history for monthly calculations.</div>
+        </div>
+
+        <div class="field inline">
           <label>Shift hours</label>
           <div class="shift-hours">
             <label for="hoursMorning">Morning</label>
@@ -135,6 +141,28 @@
           <a id="exportOffCsv" class="link" href="#" download="shift_weekly_offs.csv">Export CSV</a>
         </div>
         <div id="offDaysContainer"></div>
+      </section>
+
+      <section id="monthlyNightSection" class="schedule" hidden>
+        <div class="schedule-header">
+          <h2>Monthly Night Shifts</h2>
+          <a id="exportMonthlyXlsx" class="link" href="#" download="monthly_night_shifts.xlsx">Export XLSX</a>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="monthlyStartDate">Start Date</label>
+            <input id="monthlyStartDate" type="date" />
+          </div>
+          <div class="field">
+            <label for="monthlyEndDate">End Date</label>
+            <input id="monthlyEndDate" type="date" />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="computeMonthlyBtn">Compute Night Shifts</button>
+        </div>
+        <div id="monthlyNightContainer"></div>
+        <div class="meta">Monthly counts are calculated from saved weekly schedules. Set a Week Start Date before generating to record history.</div>
       </section>
 
       <section id="notificationsSection" class="schedule" hidden>

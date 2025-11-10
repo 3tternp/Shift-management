@@ -26,6 +26,10 @@ footer { color: var(--muted); border-top: 1px solid var(--border); }
 
 main { max-width: 1000px; margin: 0 auto; padding: 20px; }
 
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: start; }
+.section h2, .config h2, .schedule h2 { margin: 0 0 10px; font-size: 1.3rem; }
+.schedule { margin-top: 16px; }
+
 .staff-manager {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -67,6 +71,7 @@ main { max-width: 1000px; margin: 0 auto; padding: 20px; }
   border-radius: 8px;
   padding: 10px;
 }
+.field input[type="date"] { padding: 8px 10px; }
 
 .actions { display: flex; gap: 10px; margin-top: 8px; }
 button {
@@ -85,6 +90,9 @@ button.secondary:hover { background: #1f2937; }
 .error { border: 1px solid var(--danger); color: #fecaca; background: #1a0b0b; padding: 10px; border-radius: 8px; }
 .link { color: #93c5fd; text-decoration: none; font-weight: 600; }
 .link:hover { text-decoration: underline; }
+
+.link.button { display: inline-block; background: #1f2937; color: #cbd5e1; padding: 8px 12px; border-radius: 8px; }
+.link.button:hover { background: #0f172a; }
 
 .schedule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 

@@ -52,6 +52,13 @@ const els = {
   emailJsPublicKey: document.getElementById("emailJsPublicKey"),
   saveEmailJsBtn: document.getElementById("saveEmailJsBtn"),
   sendAllBtn: document.getElementById("sendAllBtn"),
+  // Monthly Night Shifts UI
+  monthlyNightSection: document.getElementById("monthlyNightSection"),
+  monthlyStartDate: document.getElementById("monthlyStartDate"),
+  monthlyEndDate: document.getElementById("monthlyEndDate"),
+  computeMonthlyBtn: document.getElementById("computeMonthlyBtn"),
+  exportMonthlyXlsx: document.getElementById("exportMonthlyXlsx"),
+  monthlyNightContainer: document.getElementById("monthlyNightContainer"),
 };
 
 // Utilities
@@ -117,6 +124,7 @@ let lastNotifications = []; // cache notifications built from last generation
 const STAFF_STORAGE_KEY = "shift_staff_manager";
 const LAST_SCHEDULE_STORAGE_KEY = "shift_last_schedule";
 const EMAILJS_STORAGE_KEY = "shift_emailjs_config";
+const SCHEDULE_HISTORY_STORAGE_KEY = "shift_schedules_history";
 
 let staffManagerState = []; // [{ name: string, email?: string, unavailable: Set(DAY) }]
 
@@ -277,6 +285,106 @@ function clearEmergencyLeaves() {
   renderEmergencyList();
   // Regenerate schedule after clearing emergencies
   try { generateAndRender({ useRotationBias: false }); } catch {}
+}
+
+// Schedule history persistence for monthly calculations
+function saveScheduleHistory(weekStart, schedule) {
+  try {
+    if (!weekStart || !schedule) return;
+    const raw = localStorage.getItem(SCHEDULE_HISTORY_STORAGE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    // Upsert by weekStart
+    const existingIdx = Array.isArray(arr) ? arr.findIndex((x) => x && x.weekStart === weekStart) : -1;
+    const entry = { weekStart, schedule };
+    if (existingIdx >= 0) arr[existingIdx] = entry; else arr.push(entry);
+    localStorage.setItem(SCHEDULE_HISTORY_STORAGE_KEY, JSON.stringify(arr));
+  } catch {}
+}
+
+function loadScheduleHistory() {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_HISTORY_STORAGE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function parseDateIso(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function isWithinRange(date, start, end) {
+  const t = date.getTime();
+  return t >= start.getTime() && t <= end.getTime();
+}
+
+function renderMonthlyNightsTable(rows) {
+  if (!els.monthlyNightSection || !els.monthlyNightContainer) return;
+  els.monthlyNightSection.hidden = false;
+  const container = document.createElement("div");
+  container.className = "table-wrap";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const tbody = document.createElement("tbody");
+  const headerRow = document.createElement("tr");
+  for (const h of ["Staff","Night Shifts"]) {
+    const th = document.createElement("th"); th.textContent = h; headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td"); tdName.textContent = r.name; tr.appendChild(tdName);
+    const tdCnt = document.createElement("td"); tdCnt.textContent = String(r.count); tr.appendChild(tdCnt);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(thead); table.appendChild(tbody);
+  container.appendChild(table);
+  els.monthlyNightContainer.innerHTML = "";
+  els.monthlyNightContainer.appendChild(container);
+}
+
+function computeMonthlyNightShifts() {
+  clearError();
+  const startVal = els.monthlyStartDate?.value || "";
+  const endVal = els.monthlyEndDate?.value || "";
+  const start = parseDateIso(startVal);
+  const end = parseDateIso(endVal);
+  if (!start || !end) { showError("Please select valid Start and End dates."); return; }
+  if (end < start) { showError("End date must be on or after Start date."); return; }
+  const history = loadScheduleHistory();
+  const counts = new Map();
+  for (const entry of history) {
+    const weekStart = parseDateIso(entry.weekStart);
+    if (!weekStart) continue;
+    for (let i = 0; i < DAYS.length; i++) {
+      const dayName = DAYS[i];
+      const date = addDays(weekStart, i);
+      if (!isWithinRange(date, start, end)) continue;
+      const assignedNight = (entry.schedule?.[dayName]?.["Night"]) || [];
+      for (const name of assignedNight) {
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+    }
+  }
+  const rows = Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+  lastMonthlyNights = rows;
+  renderMonthlyNightsTable(rows);
+}
+
+function exportMonthlyAsXlsx(rows) {
+  try {
+    const wsData = [["Staff","Night Shifts"]];
+    for (const r of rows) wsData.push([r.name, r.count]);
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Monthly Night Shifts");
+    XLSX.writeFile(wb, "monthly_night_shifts.xlsx");
+  } catch (e) { showError("Failed to export XLSX."); }
 }
 
 // Initialize emergency leaves and wire UI
@@ -875,6 +983,9 @@ function generateAndRender({ useRotationBias = false } = {}) {
     renderNotifications(notes);
     updateNotificationsExportLink(notes);
     lastNotifications = notes;
+    // Save schedule history if week start date provided
+    const wk = (els.weekStartDate?.value || '').trim();
+    if (wk) { saveScheduleHistory(wk, schedule); }
     saveLastWeekStats(stats);
   } catch (err) {
     showError(err.message || String(err));
@@ -1072,6 +1183,18 @@ if (els.staffList) {
       const name = target.dataset.name;
       if (name) removeStaff(name);
     }
+  });
+}
+// Monthly actions
+if (els.computeMonthlyBtn) {
+  els.computeMonthlyBtn.addEventListener("click", () => {
+    computeMonthlyNightShifts();
+  });
+}
+if (els.exportMonthlyXlsx) {
+  els.exportMonthlyXlsx.addEventListener("click", (e) => {
+    e.preventDefault();
+    exportMonthlyAsXlsx(lastMonthlyNights || []);
   });
 }
 // Notifications actions
