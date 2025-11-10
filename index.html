@@ -65,6 +65,18 @@
           <input type="number" id="staffPerShift" min="1" value="2" />
         </div>
 
+        <div class="field inline">
+          <label>Shift hours</label>
+          <div class="shift-hours">
+            <label for="hoursMorning">Morning</label>
+            <input type="number" id="hoursMorning" min="1" value="8" />
+            <label for="hoursDay">Day</label>
+            <input type="number" id="hoursDay" min="1" value="8" />
+            <label for="hoursNight">Night</label>
+            <input type="number" id="hoursNight" min="1" value="8" />
+          </div>
+        </div>
+
         <div class="actions">
           <button id="generateBtn">Generate Schedule</button>
           <button id="nextWeekBtn" title="Regenerate with rotation bias">Regenerate for Next Week</button>
@@ -80,6 +92,22 @@
           <a id="exportCsv" class="link" href="#" download="shift_weekly_schedule.csv">Export CSV</a>
         </div>
         <div id="scheduleContainer"></div>
+      </section>
+
+      <section id="workStatsSection" class="schedule" hidden>
+        <div class="schedule-header">
+          <h2>Work Summary</h2>
+          <a id="exportStatsCsv" class="link" href="#" download="shift_work_summary.csv">Export CSV</a>
+        </div>
+        <div id="workStatsContainer"></div>
+      </section>
+
+      <section id="offDaysSection" class="schedule" hidden>
+        <div class="schedule-header">
+          <h2>Weekly Offs</h2>
+          <a id="exportOffCsv" class="link" href="#" download="shift_weekly_offs.csv">Export CSV</a>
+        </div>
+        <div id="offDaysContainer"></div>
       </section>
     </main>
 

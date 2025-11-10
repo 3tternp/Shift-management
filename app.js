@@ -3,6 +3,8 @@
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SHIFTS = ["Morning", "Day", "Night"];
+// Default hours per shift; overridden by UI inputs
+let SHIFT_HOURS = { Morning: 8, Day: 8, Night: 8 };
 
 const els = {
   staffNames: document.getElementById("staffNames"),
@@ -13,6 +15,8 @@ const els = {
   scheduleSection: document.getElementById("scheduleSection"),
   scheduleContainer: document.getElementById("scheduleContainer"),
   exportCsv: document.getElementById("exportCsv"),
+  exportStatsCsv: document.getElementById("exportStatsCsv"),
+  exportOffCsv: document.getElementById("exportOffCsv"),
   errorBox: document.getElementById("errorBox"),
   fileInput: document.getElementById("fileInput"),
   importMeta: document.getElementById("importMeta"),
@@ -23,6 +27,15 @@ const els = {
   addStaffBtn: document.getElementById("addStaffBtn"),
   clearStaffBtn: document.getElementById("clearStaffBtn"),
   staffList: document.getElementById("staffList"),
+  // Shift hours inputs
+  hoursMorning: document.getElementById("hoursMorning"),
+  hoursDay: document.getElementById("hoursDay"),
+  hoursNight: document.getElementById("hoursNight"),
+  // Work stats UI
+  workStatsSection: document.getElementById("workStatsSection"),
+  workStatsContainer: document.getElementById("workStatsContainer"),
+  offDaysSection: document.getElementById("offDaysSection"),
+  offDaysContainer: document.getElementById("offDaysContainer"),
 };
 
 // Utilities
@@ -169,9 +182,18 @@ function updateUnavailabilityMapFromManager() {
 function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailability) {
   // Validation: require enough staff to avoid double-shifts in a day
   const requiredPerDay = SHIFTS.length * staffPerShift;
+  // Additional feasibility: each staff must have 2 off days => max 5 workdays
+  const weeklySlots = SHIFTS.length * 7 * staffPerShift; // total assignment slots in week
+  const maxSlotsByStaffCap = staff.length * 5; // each staff can work at most 5 days
   if (staff.length < requiredPerDay) {
     throw new Error(
-      `Not enough staff. Need at least ${requiredPerDay} for ${SHIFTS.length} shifts x ${staffPerShift} per shift.`
+      `Not enough staff. Need at least ${requiredPerDay} for ${SHIFTS.length} shifts x ${staffPerShift} per shift per day.`
+    );
+  }
+  if (maxSlotsByStaffCap < weeklySlots) {
+    const minStaffNeeded = Math.ceil(weeklySlots / 5);
+    throw new Error(
+      `Schedule not feasible with 2 off-days policy. Need at least ${minStaffNeeded} staff for ${staffPerShift} per shift.`
     );
   }
 
@@ -206,8 +228,8 @@ function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailabil
     for (const shift of SHIFTS) {
       const assigned = [];
 
-      // Candidate pool: not already assigned today
-      let pool = baseOrder.filter((s) => !assignedToday.has(s));
+      // Candidate pool: not already assigned today and not exceeding 5 workdays
+      let pool = baseOrder.filter((s) => !assignedToday.has(s) && weeklyCounts[s] < 5);
       // Respect unavailability per day
       if (unavailability) {
         pool = pool.filter(
@@ -280,6 +302,186 @@ function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailabil
     schedule,
     stats: { weeklyCounts, shiftTypeCounts },
   };
+}
+
+function computeWorkStats(schedule, allStaff) {
+  // Build per-staff stats: days worked, days off, total hours
+  const perStaff = {};
+  // Initialize with all staff to include zero-assignment cases
+  for (const name of allStaff || []) {
+    perStaff[name] = { daysWorked: 0, hoursWorked: 0 };
+  }
+  // Also include any names present in schedule (defensive)
+  for (const day of DAYS) {
+    for (const shift of SHIFTS) {
+      const assigned = schedule[day][shift] || [];
+      for (const name of assigned) {
+        if (!perStaff[name]) perStaff[name] = { daysWorked: 0, hoursWorked: 0 };
+      }
+    }
+  }
+  // Aggregate
+  for (const day of DAYS) {
+    for (const shift of SHIFTS) {
+      const assigned = schedule[day][shift] || [];
+      for (const name of assigned) {
+        perStaff[name].daysWorked += 1;
+        perStaff[name].hoursWorked += SHIFT_HOURS[shift] || 0;
+      }
+    }
+  }
+  // Finalize with days off
+  for (const name of Object.keys(perStaff)) {
+    const worked = perStaff[name].daysWorked;
+    perStaff[name].daysOff = Math.max(0, 7 - worked);
+  }
+  return perStaff;
+}
+
+function computeOffByDay(schedule, allStaff) {
+  const offMap = {};
+  const everyone = new Set(allStaff || []);
+  for (const day of DAYS) {
+    const assignedSet = new Set();
+    for (const shift of SHIFTS) {
+      const assigned = schedule[day][shift] || [];
+      for (const name of assigned) assignedSet.add(name);
+    }
+    const offList = Array.from(everyone).filter((name) => !assignedSet.has(name));
+    offMap[day] = offList.sort((a, b) => a.localeCompare(b));
+  }
+  return offMap;
+}
+
+function renderOffDays(offMap) {
+  if (!els.offDaysSection || !els.offDaysContainer) return;
+  els.offDaysSection.hidden = false;
+  const container = document.createElement("div");
+  container.className = "table-wrap";
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const tbody = document.createElement("tbody");
+
+  const headerRow = document.createElement("tr");
+  for (const h of ["Day", "Off Staff"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+
+  for (const day of DAYS) {
+    const tr = document.createElement("tr");
+    const tdDay = document.createElement("td");
+    tdDay.textContent = day;
+    tr.appendChild(tdDay);
+
+    const tdList = document.createElement("td");
+    const names = offMap[day] || [];
+    if (names.length === 0) {
+      tdList.textContent = "—";
+    } else {
+      for (const name of names) {
+        const pill = document.createElement("span");
+        pill.className = "staff-pill";
+        pill.textContent = name;
+        tdList.appendChild(pill);
+      }
+    }
+    tr.appendChild(tdList);
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(table);
+  els.offDaysContainer.innerHTML = "";
+  els.offDaysContainer.appendChild(container);
+}
+
+function offDaysToCsv(offMap) {
+  const rows = [];
+  rows.push(["Day", "OffStaff"].join(","));
+  for (const day of DAYS) {
+    const names = (offMap[day] || []).join(" | ");
+    rows.push([day, names].join(","));
+  }
+  return rows.join("\n");
+}
+
+function updateOffExportLink(offMap) {
+  if (!els.exportOffCsv) return;
+  const csv = offDaysToCsv(offMap);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  els.exportOffCsv.href = url;
+}
+
+function renderWorkStats(stats) {
+  if (!els.workStatsSection || !els.workStatsContainer) return;
+  els.workStatsSection.hidden = false;
+  const container = document.createElement("div");
+  container.className = "table-wrap";
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const tbody = document.createElement("tbody");
+
+  const headerRow = document.createElement("tr");
+  for (const h of ["Staff", "Days Worked", "Days Off", "Hours Worked"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+
+  const names = Object.keys(stats).sort((a, b) => a.localeCompare(b));
+  for (const name of names) {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td");
+    tdName.textContent = name;
+    tr.appendChild(tdName);
+
+    const tdDaysWorked = document.createElement("td");
+    tdDaysWorked.textContent = String(stats[name].daysWorked || 0);
+    tr.appendChild(tdDaysWorked);
+
+    const tdDaysOff = document.createElement("td");
+    tdDaysOff.textContent = String(stats[name].daysOff || 0);
+    tr.appendChild(tdDaysOff);
+
+    const tdHours = document.createElement("td");
+    tdHours.textContent = String(stats[name].hoursWorked || 0);
+    tr.appendChild(tdHours);
+
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  els.workStatsContainer.innerHTML = "";
+  els.workStatsContainer.appendChild(container);
+}
+
+function statsToCsv(stats) {
+  const rows = [];
+  rows.push(["Staff", "DaysWorked", "DaysOff", "HoursWorked"].join(","));
+  for (const name of Object.keys(stats)) {
+    const { daysWorked = 0, daysOff = 0, hoursWorked = 0 } = stats[name] || {};
+    rows.push([name, daysWorked, daysOff, hoursWorked].join(","));
+  }
+  return rows.join("\n");
+}
+
+function updateStatsExportLink(stats) {
+  if (!els.exportStatsCsv) return;
+  const csv = statsToCsv(stats);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  els.exportStatsCsv.href = url;
 }
 
 function renderSchedule(schedule) {
@@ -364,6 +566,14 @@ function getConfig() {
   if (!Number.isFinite(staffPerShift) || staffPerShift < 1) {
     throw new Error("Staff per shift must be a positive integer.");
   }
+  // Read shift hours
+  const hMorning = parseInt(els.hoursMorning?.value || "8", 10);
+  const hDay = parseInt(els.hoursDay?.value || "8", 10);
+  const hNight = parseInt(els.hoursNight?.value || "8", 10);
+  if (![hMorning, hDay, hNight].every((n) => Number.isFinite(n) && n > 0)) {
+    throw new Error("Shift hours must be positive integers.");
+  }
+  SHIFT_HOURS = { Morning: hMorning, Day: hDay, Night: hNight };
   return { staff, staffPerShift };
 }
 
@@ -383,6 +593,12 @@ function generateAndRender({ useRotationBias = false } = {}) {
     );
     renderSchedule(schedule);
     updateExportLink(schedule);
+    const workStats = computeWorkStats(schedule, sourceStaff);
+    renderWorkStats(workStats);
+    updateStatsExportLink(workStats);
+    const offMap = computeOffByDay(schedule, sourceStaff);
+    renderOffDays(offMap);
+    updateOffExportLink(offMap);
     saveLastWeekStats(stats);
   } catch (err) {
     showError(err.message || String(err));

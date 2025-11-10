@@ -100,3 +100,6 @@ tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.02); }
 .staff-pill { display: inline-block; margin: 4px; padding: 6px 10px; border-radius: 999px; background: #0b1222; border: 1px solid var(--border); }
 
 .meta { color: var(--muted); font-size: 0.9rem; }
+/* Shift hours inline controls */
+.shift-hours label { margin-right: 6px; }
+.shift-hours input { width: 80px; }
