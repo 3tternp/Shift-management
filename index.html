@@ -20,6 +20,8 @@
         <div class="field inline">
           <label for="newStaffName">Name</label>
           <input id="newStaffName" type="text" placeholder="Enter staff name" />
+          <label for="newStaffEmail">Email</label>
+          <input id="newStaffEmail" type="email" placeholder="name@example.com" />
           <button id="addStaffBtn">Add Staff</button>
         </div>
         <div class="field">
@@ -42,6 +44,31 @@
             <button id="clearStaffBtn" class="secondary">Clear All</button>
           </div>
           <div id="staffList" class="staff-list" aria-live="polite"></div>
+        </div>
+      </section>
+      <section class="config">
+        <h2>Emergency Leave</h2>
+        <div class="field inline">
+          <label for="emgStaff">Staff</label>
+          <select id="emgStaff"></select>
+          <label for="emgDay">Day</label>
+          <select id="emgDay">
+            <option>Mon</option>
+            <option>Tue</option>
+            <option>Wed</option>
+            <option>Thu</option>
+            <option>Fri</option>
+            <option>Sat</option>
+            <option>Sun</option>
+          </select>
+          <button id="applyEmergencyBtn">Apply Emergency Leave & Regenerate</button>
+        </div>
+        <div class="field">
+          <div class="staff-list-header">
+            <span class="meta">Recorded Emergency Leaves</span>
+            <button id="clearEmergencyBtn" class="secondary">Clear All</button>
+          </div>
+          <div id="emergencyList" class="staff-list" aria-live="polite"></div>
         </div>
       </section>
       <section class="config">
@@ -109,7 +136,31 @@
         </div>
         <div id="offDaysContainer"></div>
       </section>
+
+      <section id="notificationsSection" class="schedule" hidden>
+        <div class="schedule-header">
+          <h2>Notifications</h2>
+          <a id="exportNotificationsCsv" class="link" href="#" download="shift_notifications.csv">Export CSV</a>
+        </div>
+        <div class="field">
+          <label>EmailJS (optional)</label>
+          <div class="field inline">
+            <input id="emailJsServiceId" type="text" placeholder="service_id" />
+            <input id="emailJsTemplateId" type="text" placeholder="template_id" />
+            <input id="emailJsPublicKey" type="text" placeholder="public_key" />
+            <button id="saveEmailJsBtn" class="secondary">Save</button>
+          </div>
+          <div class="meta">If configured, clicking "Send All" will send emails via EmailJS. Otherwise, use mailto links.</div>
+        </div>
+        <div class="actions">
+          <button id="sendAllBtn">Send All</button>
+        </div>
+        <div id="notificationsContainer"></div>
+      </section>
     </main>
+
+    <!-- EmailJS (optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
     <footer>
       <small>

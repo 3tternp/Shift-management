@@ -24,6 +24,7 @@ const els = {
   importCols: document.getElementById("importCols"),
   // Staff manager UI
   newStaffName: document.getElementById("newStaffName"),
+  newStaffEmail: document.getElementById("newStaffEmail"),
   addStaffBtn: document.getElementById("addStaffBtn"),
   clearStaffBtn: document.getElementById("clearStaffBtn"),
   staffList: document.getElementById("staffList"),
@@ -36,6 +37,21 @@ const els = {
   workStatsContainer: document.getElementById("workStatsContainer"),
   offDaysSection: document.getElementById("offDaysSection"),
   offDaysContainer: document.getElementById("offDaysContainer"),
+  // Emergency leave UI
+  emgStaff: document.getElementById("emgStaff"),
+  emgDay: document.getElementById("emgDay"),
+  applyEmergencyBtn: document.getElementById("applyEmergencyBtn"),
+  clearEmergencyBtn: document.getElementById("clearEmergencyBtn"),
+  emergencyList: document.getElementById("emergencyList"),
+  // Notifications UI
+  notificationsSection: document.getElementById("notificationsSection"),
+  notificationsContainer: document.getElementById("notificationsContainer"),
+  exportNotificationsCsv: document.getElementById("exportNotificationsCsv"),
+  emailJsServiceId: document.getElementById("emailJsServiceId"),
+  emailJsTemplateId: document.getElementById("emailJsTemplateId"),
+  emailJsPublicKey: document.getElementById("emailJsPublicKey"),
+  saveEmailJsBtn: document.getElementById("saveEmailJsBtn"),
+  sendAllBtn: document.getElementById("sendAllBtn"),
 };
 
 // Utilities
@@ -94,16 +110,21 @@ function loadLastWeekStats() {
 
 // Build fairness-aware weekly schedule
 let unavailabilityByStaff = {}; // { name: Set(dayName) }
+let emergencyLeaves = {}; // { name: Set(dayName) }
+let lastNotifications = []; // cache notifications built from last generation
 
 // Staff Manager persistence
 const STAFF_STORAGE_KEY = "shift_staff_manager";
+const LAST_SCHEDULE_STORAGE_KEY = "shift_last_schedule";
+const EMAILJS_STORAGE_KEY = "shift_emailjs_config";
 
-let staffManagerState = []; // [{ name: string, unavailable: Set(DAY) }]
+let staffManagerState = []; // [{ name: string, email?: string, unavailable: Set(DAY) }]
 
 function saveStaffManager() {
   try {
     const serializable = staffManagerState.map((s) => ({
       name: s.name,
+      email: s.email || "",
       unavailable: Array.from(s.unavailable || []),
     }));
     localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(serializable));
@@ -116,7 +137,7 @@ function loadStaffManager() {
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr)
-      ? arr.map((s) => ({ name: s.name, unavailable: new Set(s.unavailable || []) }))
+      ? arr.map((s) => ({ name: s.name, email: s.email || "", unavailable: new Set(s.unavailable || []) }))
       : [];
   } catch {
     return [];
@@ -150,6 +171,10 @@ function renderStaffList() {
     nameEl.className = "staff-name";
     nameEl.textContent = entry.name;
 
+    const emailEl = document.createElement("span");
+    emailEl.className = "unavail";
+    emailEl.textContent = entry.email ? `<${entry.email}>` : "<no email>";
+
     const unavailEl = document.createElement("span");
     unavailEl.className = "unavail";
     const days = Array.from(entry.unavailable || []).join(", ");
@@ -161,6 +186,7 @@ function renderStaffList() {
     removeBtn.dataset.name = entry.name;
 
     card.appendChild(nameEl);
+    card.appendChild(emailEl);
     card.appendChild(unavailEl);
     card.appendChild(removeBtn);
     els.staffList.appendChild(card);
@@ -171,13 +197,95 @@ function updateTextAreaFromManager() {
   if (staffManagerState.length) {
     els.staffNames.value = staffManagerState.map((s) => s.name).join("\n");
   }
+  if (els.emgStaff) {
+    els.emgStaff.innerHTML = "";
+    for (const s of staffManagerState) {
+      const opt = document.createElement("option");
+      opt.value = s.name;
+      opt.textContent = s.name;
+      els.emgStaff.appendChild(opt);
+    }
+  }
 }
 
 function updateUnavailabilityMapFromManager() {
   unavailabilityByStaff = Object.fromEntries(
     staffManagerState.map((s) => [s.name, new Set(s.unavailable || [])])
   );
+  // Merge emergency leaves as day-level unavailability
+  for (const [name, days] of Object.entries(emergencyLeaves)) {
+    const set = unavailabilityByStaff[name] || new Set();
+    for (const d of days) set.add(d);
+    unavailabilityByStaff[name] = set;
+  }
 }
+
+// Emergency leave management
+function saveEmergencyLeaves() {
+  try {
+    const serializable = Object.fromEntries(
+      Object.entries(emergencyLeaves).map(([k, v]) => [k, Array.from(v || [])])
+    );
+    localStorage.setItem("shift_emergency_leaves", JSON.stringify(serializable));
+  } catch {}
+}
+
+function loadEmergencyLeaves() {
+  try {
+    const raw = localStorage.getItem("shift_emergency_leaves");
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return Object.fromEntries(
+      Object.entries(obj || {}).map(([k, v]) => [k, new Set(v || [])])
+    );
+  } catch {
+    return {};
+  }
+}
+
+function renderEmergencyList() {
+  if (!els.emergencyList) return;
+  els.emergencyList.innerHTML = "";
+  const daysOrder = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  for (const [name, days] of Object.entries(emergencyLeaves)) {
+    const li = document.createElement("li");
+    const sorted = daysOrder.filter((d)=>days.has(d));
+    li.textContent = `${name}: ${sorted.join(", ") || "(none)"}`;
+    els.emergencyList.appendChild(li);
+  }
+}
+
+function applyEmergencyLeave() {
+  if (!els.emgStaff || !els.emgDay) return;
+  const staff = (els.emgStaff.value || "").trim();
+  const day = els.emgDay.value;
+  if (!staff || !day) return;
+  const set = emergencyLeaves[staff] || new Set();
+  set.add(day);
+  emergencyLeaves[staff] = set;
+  saveEmergencyLeaves();
+  updateUnavailabilityMapFromManager();
+  renderEmergencyList();
+  // Regenerate schedule and notifications to reflect emergency changes
+  try { generateAndRender({ useRotationBias: false }); } catch {}
+}
+
+function clearEmergencyLeaves() {
+  emergencyLeaves = {};
+  saveEmergencyLeaves();
+  updateUnavailabilityMapFromManager();
+  renderEmergencyList();
+  // Regenerate schedule after clearing emergencies
+  try { generateAndRender({ useRotationBias: false }); } catch {}
+}
+
+// Initialize emergency leaves and wire UI
+try {
+  emergencyLeaves = loadEmergencyLeaves();
+  renderEmergencyList();
+  if (els.applyEmergencyBtn) els.applyEmergencyBtn.addEventListener("click", applyEmergencyLeave);
+  if (els.clearEmergencyBtn) els.clearEmergencyBtn.addEventListener("click", clearEmergencyLeaves);
+} catch {}
 
 function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailability) {
   // Validation: require enough staff to avoid double-shifts in a day
@@ -237,6 +345,16 @@ function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailabil
         );
       }
 
+      // Weekend rule: if Sat/Sun, exclude staff who worked Night on both Thu and Fri
+      let weekendExcluded = new Set();
+      if (dayName === "Sat" || dayName === "Sun") {
+        const thuNight = (schedule["Thu"] && schedule["Thu"]["Night"]) || [];
+        const friNight = (schedule["Fri"] && schedule["Fri"]["Night"]) || [];
+        const duo = new Set(thuNight.filter((n) => friNight.includes(n)));
+        weekendExcluded = duo;
+        pool = pool.filter((s) => !duo.has(s));
+      }
+
       // Soft constraints first: avoid repeating same shift as previous day, avoid consecutive nights
       const preferred = pool.filter((s) => {
         const last = lastShiftByStaff[s];
@@ -275,6 +393,15 @@ function generateWeeklySchedule(staff, staffPerShift, lastWeekStats, unavailabil
       if (ordered.length < staffPerShift) {
         // Fully relax if still insufficient
         ordered = ranker(pool);
+        // Emergency relaxation: if weekend excluded caused shortage and there are emergency leaves,
+        // allow previously excluded staff back to meet demand.
+        if (ordered.length < staffPerShift && weekendExcluded.size > 0 && (dayName === "Sat" || dayName === "Sun")) {
+          const emergencyPresent = Object.values(emergencyLeaves || {}).some((set) => set && set.has(dayName));
+          if (emergencyPresent) {
+            const fullyRelaxPool = Array.from(new Set([...pool, ...Array.from(weekendExcluded)]));
+            ordered = ranker(fullyRelaxPool);
+          }
+        }
       }
 
       for (const s of ordered) {
@@ -351,6 +478,143 @@ function computeOffByDay(schedule, allStaff) {
     offMap[day] = offList.sort((a, b) => a.localeCompare(b));
   }
   return offMap;
+}
+
+// Notifications: build messages per staff and render/export
+function buildNotifications(schedule, allStaff, staffEmails) {
+  const byStaff = new Map();
+  for (const day of DAYS) {
+    for (const shift of SHIFTS) {
+      const assigned = schedule[day][shift] || [];
+      for (const name of assigned) {
+        const arr = byStaff.get(name) || [];
+        arr.push(`${day} ${shift}`);
+        byStaff.set(name, arr);
+      }
+    }
+  }
+  const notes = [];
+  const everyone = allStaff || [];
+  for (const name of everyone) {
+    const list = byStaff.get(name) || [];
+    const email = staffEmails[name] || "";
+    const msg = list.length
+      ? `Hello ${name}, your shifts: ${list.join(", ")}.`
+      : `Hello ${name}, you have no assigned shifts this week.`;
+    notes.push({ name, email, message: msg });
+  }
+  return notes;
+}
+
+function renderNotifications(notes) {
+  if (!els.notificationsSection || !els.notificationsContainer) return;
+  els.notificationsSection.hidden = false;
+  const container = document.createElement("div");
+  container.className = "table-wrap";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const tbody = document.createElement("tbody");
+  const headerRow = document.createElement("tr");
+  for (const h of ["Staff","Email","Message","Send"]) {
+    const th = document.createElement("th"); th.textContent = h; headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  for (const n of notes) {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td"); tdName.textContent = n.name; tr.appendChild(tdName);
+    const tdEmail = document.createElement("td"); tdEmail.textContent = n.email || ""; tr.appendChild(tdEmail);
+    const tdMsg = document.createElement("td"); tdMsg.textContent = n.message; tr.appendChild(tdMsg);
+    const tdSend = document.createElement("td");
+    const link = document.createElement("a");
+    link.href = `mailto:${encodeURIComponent(n.email||"")}?subject=${encodeURIComponent("Shift Schedule")}&body=${encodeURIComponent(n.message)}`;
+    link.textContent = "Email";
+    link.target = "_blank";
+    tdSend.appendChild(link);
+    tr.appendChild(tdSend);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(table);
+  els.notificationsContainer.innerHTML = "";
+  els.notificationsContainer.appendChild(container);
+}
+
+function notificationsToCsv(notes) {
+  const rows = [["Name","Email","Message"]];
+  for (const n of notes) rows.push([n.name, n.email || "", n.message]);
+  return rows.map((r)=>r.map((x)=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+}
+function updateNotificationsExportLink(notes) {
+  if (!els.exportNotificationsCsv) return;
+  const csv = notificationsToCsv(notes);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  els.exportNotificationsCsv.href = url;
+}
+
+// EmailJS configuration and bulk sending (optional)
+function saveEmailJsConfig() {
+  try {
+    const cfg = {
+      serviceId: (els.emailJsServiceId?.value || "").trim(),
+      templateId: (els.emailJsTemplateId?.value || "").trim(),
+      publicKey: (els.emailJsPublicKey?.value || "").trim(),
+    };
+    localStorage.setItem(EMAILJS_STORAGE_KEY, JSON.stringify(cfg));
+  } catch {}
+}
+
+function loadEmailJsConfig() {
+  try {
+    const raw = localStorage.getItem(EMAILJS_STORAGE_KEY);
+    if (!raw) return { serviceId: "", templateId: "", publicKey: "" };
+    const cfg = JSON.parse(raw);
+    // Populate inputs if present
+    if (els.emailJsServiceId) els.emailJsServiceId.value = cfg.serviceId || "";
+    if (els.emailJsTemplateId) els.emailJsTemplateId.value = cfg.templateId || "";
+    if (els.emailJsPublicKey) els.emailJsPublicKey.value = cfg.publicKey || "";
+    return cfg;
+  } catch {
+    return { serviceId: "", templateId: "", publicKey: "" };
+  }
+}
+
+function initEmailJs(publicKey) {
+  try {
+    if (window.emailjs && publicKey) {
+      window.emailjs.init(publicKey);
+    }
+  } catch {}
+}
+
+async function sendAllNotifications(notes) {
+  const cfg = loadEmailJsConfig();
+  const hasEmailJs = cfg && cfg.serviceId && cfg.templateId && cfg.publicKey && window.emailjs;
+  if (hasEmailJs) {
+    initEmailJs(cfg.publicKey);
+    for (const n of notes) {
+      if (!n.email) continue;
+      try {
+        await window.emailjs.send(cfg.serviceId, cfg.templateId, {
+          to_email: n.email,
+          to_name: n.name,
+          message: n.message,
+        });
+      } catch (e) {
+        // Fall back to mailto for failures
+        try { window.open(`mailto:${encodeURIComponent(n.email)}?subject=${encodeURIComponent("Shift Schedule")}&body=${encodeURIComponent(n.message)}`, "_blank"); } catch {}
+      }
+    }
+  } else {
+    // Fallback: open mailto links for each note
+    for (const n of notes) {
+      if (!n.email) continue;
+      try {
+        window.open(`mailto:${encodeURIComponent(n.email)}?subject=${encodeURIComponent("Shift Schedule")}&body=${encodeURIComponent(n.message)}`, "_blank");
+      } catch {}
+    }
+  }
 }
 
 function renderOffDays(offMap) {
@@ -584,6 +848,12 @@ function generateAndRender({ useRotationBias = false } = {}) {
     const managerHasEntries = staffManagerState.length > 0;
     const sourceStaff = managerHasEntries ? staffManagerState.map((s) => s.name) : staff;
     const unavailSource = managerHasEntries ? Object.fromEntries(staffManagerState.map((s) => [s.name, new Set(s.unavailable || [])])) : unavailabilityByStaff;
+    // Merge emergency leaves into unavailability map
+    for (const [name, days] of Object.entries(emergencyLeaves || {})) {
+      const set = unavailSource[name] || new Set();
+      for (const d of days) set.add(d);
+      unavailSource[name] = set;
+    }
     const lastWeekStats = useRotationBias ? loadLastWeekStats() : null;
     const { schedule, stats } = generateWeeklySchedule(
       sourceStaff,
@@ -599,6 +869,12 @@ function generateAndRender({ useRotationBias = false } = {}) {
     const offMap = computeOffByDay(schedule, sourceStaff);
     renderOffDays(offMap);
     updateOffExportLink(offMap);
+    // Build and render notifications
+    const staffEmails = Object.fromEntries(staffManagerState.map((s) => [s.name, s.email || ""]));
+    const notes = buildNotifications(schedule, sourceStaff, staffEmails);
+    renderNotifications(notes);
+    updateNotificationsExportLink(notes);
+    lastNotifications = notes;
     saveLastWeekStats(stats);
   } catch (err) {
     showError(err.message || String(err));
@@ -756,12 +1032,14 @@ function addStaff() {
     return;
   }
   const unavailable = getCheckedDays();
-  staffManagerState.push({ name, unavailable });
+  const email = els.newStaffEmail ? (els.newStaffEmail.value || "").trim() : "";
+  staffManagerState.push({ name, email, unavailable });
   saveStaffManager();
   renderStaffList();
   updateTextAreaFromManager();
   updateUnavailabilityMapFromManager();
   if (els.newStaffName) els.newStaffName.value = "";
+  if (els.newStaffEmail) els.newStaffEmail.value = "";
   clearDayChecks();
 }
 
@@ -796,9 +1074,22 @@ if (els.staffList) {
     }
   });
 }
+// Notifications actions
+if (els.saveEmailJsBtn) {
+  els.saveEmailJsBtn.addEventListener("click", () => {
+    saveEmailJsConfig();
+  });
+}
+if (els.sendAllBtn) {
+  els.sendAllBtn.addEventListener("click", () => {
+    try { sendAllNotifications(lastNotifications || []); } catch {}
+  });
+}
 
 // Initialize Staff Manager from storage
 staffManagerState = loadStaffManager();
 renderStaffList();
 updateTextAreaFromManager();
 updateUnavailabilityMapFromManager();
+// Load EmailJS config into inputs on startup
+loadEmailJsConfig();
